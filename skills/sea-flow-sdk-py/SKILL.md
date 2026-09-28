@@ -30,9 +30,12 @@ user = client.with_end_user(current_user_id)
 ```
 
 - Construct one shared client per server configuration. `with_end_user` returns
-  a copy with a different `X-Infra-User-Id`; it does not change project ownership.
-- Workspaces, workflows, templates, assets, and records belong to the project
-  bound to the credential. End-user identity scopes run activity, not ownership.
+  a copy with a different `X-Infra-User-Id`, which scopes that user's private
+  workspaces, draft workflows, assets, records, and runs within the project.
+- Published templates are shared catalog entries. Any caller may read or copy
+  one, while only its creator may manage it.
+- Derive the end-user ID from the integrating product's authenticated user. Do
+  not send it as a model-selected argument or expose the Production Key to a browser.
 
 ## Workflow changes
 

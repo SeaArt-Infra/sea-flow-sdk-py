@@ -32,7 +32,8 @@ and every method under its Go-style name (`client.workflows.Create(...)`).
 2. Every request carries that same key as `Authorization: Bearer <token>`. OpenResty
    authenticates it, then SeaFlow resolves the workflow project bound to it.
 3. The end user travels per request as `X-Infra-User-Id`. Set a default with
-   `end_user_id`, or copy the client per request with `with_end_user`.
+   `end_user_id`, or copy the client per request with `with_end_user`. It
+   scopes that user's private workspaces, draft workflows, assets, records, and runs.
 4. The Engine answers with the platform envelope `{"code":0,"message":"ok","data":...}`.
    The SDK returns `data` directly and raises on a failure.
 
@@ -111,7 +112,7 @@ print("run status:", user.runs.get(run["id"])["run"]["status"])
 | `base_url` | yes, unless `api_base_url` is set | Gateway or Engine root. The SDK derives `<base_url>/api/v1`; use `https://seainfra.dev/flow` for OpenResty |
 | `api_base_url` | no | Explicit full API prefix, mainly for test servers or non-standard mounts |
 | `production_key` | yes | The one Production Key bound to this caller. Every API request carries it as Bearer authentication |
-| `end_user_id` | no | Default `X-Infra-User-Id`. The Engine stores it as an opaque identifier and never resolves it to an account |
+| `end_user_id` | no | Default `X-Infra-User-Id`. It scopes private resources within the project; derive it from the integrating product's authenticated user |
 | `headers` | no | Extra headers on every request. `Authorization` is always replaced with `production_key`; set `end_user_id` rather than an `X-Infra-User-Id` header |
 | `timeout` | no | Per-request timeout in seconds, 60 by default; `0` means no timeout |
 
@@ -138,12 +139,21 @@ is sent as `{}` for that reason. `workflows.delete` is a DELETE and never carrie
 
 ## Ownership
 
-Ownership follows the Production Key's bound project, not the end user:
+The Production Key authenticates the integrating project. `end_user_id` scopes
+a private owner inside that project, so workspaces, draft workflows, assets,
+records, and runs created through `with_end_user` are visible only to that same
+end user. The same external user ID in another project remains isolated.
 
-- `owner` is the bound project, so **workspaces, canvases, assets and
-  records are project-scoped** — every end user of that product shares them.
-- Runs are separated per end user: `workflows.list_runs` and `runs.get` only ever
-  answer with the caller's own runs.
+Published templates are a shared catalog: any caller may list, read, and copy
+them, while only their creator may publish a new version or take one offline.
+
+Omit `end_user_id` only for a deliberately shared project workspace. A project
+credential still requires `end_user_id` to start a run, because the Engine cannot
+invent the integrating product's user identity.
+
+Resources created without `end_user_id` remain project-shared. SeaFlow cannot
+safely infer their historical end user, so move or export them under the
+integrating product's own policy before adopting `end_user_id` for existing data.
 
 The catalog still carries the same key even though SeaFlow itself does not use it for
 catalog ownership: OpenResty requires it before forwarding `/flow` requests.
@@ -222,10 +232,11 @@ python3 -m unittest discover -s tests -p "test_engine.py" -v
 ```
 
 It covers: authenticated catalog access, an unbound Production Key being refused, create
-workspace → create canvas → save a graph → read it back → publish → another end user
-seeing the same canvas → list workflows, workspace workflows, workspace counts, runs,
-records and assets → typed 404s → delete. It then starts a run, which needs no runtime
-inputs, and asserts the Engine got past the request body: a disposable engine has no
+workspace → create canvas → save a graph → another end user being refused the private
+draft → publish → another end user reading the published canvas → list workflows,
+workspace workflows, workspace counts, runs, records and assets → typed 404s → delete.
+It then starts a run, which needs no runtime inputs, and asserts the Engine got
+past the request body: a disposable engine has no
 model gateway, so the call stops at the model catalog, which is enough to prove the
 create was read as a request.
 
@@ -271,9 +282,10 @@ user = client.with_end_user(current_user_id)
 ```
 
 - Construct one shared client per server configuration. `with_end_user` returns
-  a copy with a different `X-Infra-User-Id`; it does not change project ownership.
-- Workspaces, workflows, templates, assets, and records belong to the project
-  bound to the credential. End-user identity scopes run activity, not ownership.
+  a copy with a different `X-Infra-User-Id`, which scopes that user's private
+  SeaFlow resources within the project.
+- Derive the end-user ID from the integrating product's authenticated user. Do
+  not send it as a model-selected argument or expose the Production Key to a browser.
 
 ## Workflow changes
 

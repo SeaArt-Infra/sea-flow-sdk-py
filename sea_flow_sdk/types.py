@@ -9,7 +9,8 @@ from typing import Any
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
 # The header the Engine reads the integrating product's end user from
-# (ADR-0010). It is set from ClientOptions.end_user_id.
+# (ADR-0010). It scopes private project resources and is set from
+# ClientOptions.end_user_id.
 END_USER_HEADER = "X-Infra-User-Id"
 
 # Node kinds a canvas node may carry in graph node data.kind.

@@ -96,9 +96,9 @@ class TemplatesResource:
 
 
 class WorkspacesResource:
-    """Workspaces group canvases, and belong to the caller identity: with a
-    Production Key that is bound to the project, so every end user of the product shares
-    them. An end user separates runs, not canvases (ADR-0005, ADR-0010)."""
+    """With ``end_user_id``, workspaces belong to that end user inside the
+    project bound to the Production Key. Omitting it retains the project's shared
+    workspace (ADR-0005, ADR-0010)."""
 
     def __init__(self, transport: Transport) -> None:
         self.transport = transport
@@ -285,9 +285,9 @@ class ModelsResource:
 class AssetsResource:
     """The terminal output of the caller's runs, as the asset library lists it.
 
-    Ownership follows the credential, not the end user: with the Production Key the
-    list spans every end user of that project. Only runs are separated per end
-    user. The result never contains another project's assets."""
+    With ``end_user_id``, the list includes only that end user's outputs inside
+    the project bound to the Production Key. The result never contains another
+    project's or end user's assets."""
 
     def __init__(self, transport: Transport) -> None:
         self.transport = transport

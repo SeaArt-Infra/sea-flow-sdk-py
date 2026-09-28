@@ -142,14 +142,17 @@ class EngineEndToEndTests(unittest.TestCase):
         self.assertIn("dimensions", saved["graph"]["nodes"][0]["data"])
         self.assertEqual(saved["graph"]["nodes"][1]["data"]["model"], "nano_banana_2")
 
-        # 5. Publish it: it mints the immutable version a run executes (ADR-0007).
+        # 5. Draft workflows are private to the end user that created them.
+        with self.assertRaises(WorkflowAPIError) as hidden:
+            other_end_user.workflows.get(created["id"])
+        self.assertTrue(is_not_found(hidden.exception))
+
+        # 5b. Publish it: it mints the immutable version a run executes (ADR-0007).
         published = client.workflows.publish(created["id"])
         self.assertTrue(published["publishedVersionId"])
 
-        # 5b. Ownership follows the credential, not the end user: the canvas is
-        # project-scoped, so another end user of the same product sees it.
-        from_another_end_user = other_end_user.workflows.get(created["id"])
-        self.assertEqual(from_another_end_user["id"], created["id"])
+        # Published workflows are visible to callers on the same production line.
+        other_end_user.workflows.get(created["id"])
 
         # 6. Reads that must agree with the writes.
         workflows = client.workflows.list({"limit": 100})

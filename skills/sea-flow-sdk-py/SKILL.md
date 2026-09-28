@@ -1,65 +1,54 @@
 ---
 name: sea-flow-sdk-py
-description: Build and troubleshoot SeaFlow integrations with the Python SDK. Use when creating, publishing, copying, or running workflows, browsing templates and models, or diagnosing Production Key and end-user attribution errors.
+description: Implement or troubleshoot server-side SeaFlow workflow integrations with the Python SDK. Use for template, workspace, workflow, run, model, asset, or record operations; do not use for browser clients.
 ---
 
-# SeaFlow Python SDK
+# Sea Flow SDK Python
 
 Use `sea-flow-sdk-py` with Python 3.10+.
 
-## Install
+## Scope
 
-```bash
-pip install sea-flow-sdk-py
-```
+- Use this synchronous SDK from server code only. Keep `production_key` in the
+  host application's existing secret mechanism; do not expose it to a browser.
+- Use the SDK rather than duplicating its REST transport or adding a
+  `production_provider` request field.
+- Read `docs/usage-guide.md` before using a resource method not covered here.
 
-## Workflow
-
-1. Create one `Client` with the OpenResty root and onboarded Production Key.
-2. Call `with_end_user` for the current product user; it sets
-   `X-Infra-User-Id` without changing project ownership.
-3. Create or copy a workflow, save its graph, publish it, and create a run.
-4. Read or stop runs; use `template_catalog` and `models` for discovery.
-5. Do not send `production_provider`; the server resolves it from the key's
-   onboarded project.
-
-## Initialize
+## Client and identity
 
 ```python
 import os
 
 from sea_flow_sdk import Client
+
 client = Client(
-    base_url="https://seainfra.dev/flow",
+    base_url=os.environ["SEA_FLOW_BASE_URL"],
     production_key=os.environ["SEA_FLOW_SDK_PRODUCTION_KEY"],
 )
-user = client.with_end_user("customer-42")
+user = client.with_end_user(current_user_id)
 ```
 
-Every request carries `Authorization: Bearer <production_key>`. The key stays
-server-side; the SDK has no browser mode.
+- Construct one shared client per server configuration. `with_end_user` returns
+  a copy with a different `X-Infra-User-Id`; it does not change project ownership.
+- Workspaces, workflows, templates, assets, and records belong to the project
+  bound to the credential. End-user identity scopes run activity, not ownership.
 
-## Core call
+## Workflow changes
 
-```python
-workspace = user.workspaces.create({"name": "Demo"})
-workflow = user.workspaces.create_workflow(workspace["id"])
-user.workflows.save(workflow["id"], {"name": "Demo", "graph": graph})
-user.workflows.publish(workflow["id"])
-run = user.workflows.create_run(workflow["id"])
-detail = user.runs.get(run["id"])
-```
+- Standard write flow: create or copy a workspace workflow, `save` its complete
+  graph and name, `publish`, then `create_run`.
+- `workflows.save` replaces both name and graph. For a partial change, read the
+  workflow first and preserve the field that is not changing.
+- Treat graph dictionaries as opaque JSON. Preserve canvas layout and unknown
+  node fields during read-modify-write operations.
+- `create_run` schedules asynchronous work. A concurrent active run can return a
+  conflict; do not retry it blindly.
 
 ## Errors
 
-Catch `WorkflowAPIError`; use `is_not_found` and `is_conflict`. Client mistakes
-raise `WorkflowConfigError` with codes such as `MISSING_BASE_URL`,
-`MISSING_PRODUCTION_KEY`, and `MISSING_IDENTIFIER`.
-
-## Route reference
-
-- `template_catalog.search`, `read_graph`
-- `templates.list`, `publish`, `get`, `delete`, `copy`, `publish_version`
-- `workspaces.list`, `create`, `get`, `rename`, `delete`, `list_workflows`, `create_workflow`
-- `workflows.list`, `create`, `get`, `save`, `delete`, `publish`, `pin_cover`, `list_runs`, `create_run`
-- `runs.get`, `stop`; `models.list`; `assets.list`; `records.list`
+- `WorkflowConfigError` means local input/configuration failed before a request;
+  inspect its code, including `MISSING_BASE_URL`, `MISSING_PRODUCTION_KEY`, and
+  `MISSING_IDENTIFIER`.
+- `WorkflowAPIError` is an API envelope or HTTP failure. Use `is_not_found` and
+  `is_conflict` for 404 and 409 handling; preserve other error details for callers.

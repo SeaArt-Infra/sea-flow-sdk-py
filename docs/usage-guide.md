@@ -56,6 +56,23 @@ print(published["publishedVersionId"], detail["run"]["status"])
 `workflows.save` replaces both name and graph. Read the draft first when only
 one field changes. A graph with runtime inputs must pass them to `create_run`.
 
+## Team space
+
+A workspace or workflow created with a bare project key — no `end_user_id` — lives
+in the project's shared space. `with_scope` reads that space:
+
+```python
+from sea_flow_sdk import SCOPE_TEAM
+
+team = client.with_scope(SCOPE_TEAM)
+workspaces = team.workspaces.list()
+```
+
+The scope belongs to the client and applies to reads only: the Engine resolves
+reads against the shared owner and leaves writes in the caller's own space. Only a
+credential that already belongs to the project reaches that space; for anyone else
+the scope still resolves to the caller's own space.
+
 ## Resources
 
 - `template_catalog.search` and `read_graph` query the published catalog.

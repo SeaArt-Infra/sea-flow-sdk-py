@@ -34,6 +34,12 @@ user = client.with_end_user(current_user_id)
   workspaces, draft workflows, assets, records, and runs within the project.
 - Published templates are shared catalog entries. Any caller may read or copy
   one, while only its creator may manage it.
+- A personal key already fixes its end user, so pass it in the same
+  `production_key` option and leave `end_user_id` unset: the Engine answers 403 to
+  a personal key that also carries `X-Infra-User-Id`. Create one on the platform's
+  Account page, or let the `seaflow` CLI request one when it signs you in.
+- Read the project's shared space with `with_scope(SCOPE_TEAM)`: the scope applies
+  to reads only, and a write on that client still lands in the caller's own space.
 - Derive the end-user ID from the integrating product's authenticated user. Do
   not send it as a model-selected argument or expose the Production Key to a browser.
 

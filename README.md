@@ -1,6 +1,6 @@
 # sea-flow-sdk-py
 
-> First release. The contract is maintained in SeaFlow at `docs/seaflow-openapi.yaml`.
+> First release. The contract is maintained in SeaFlow at `docs/seaflow-openapi.yaml`
 > in the Workflow Engine repository; the Engine never depends on this package.
 
 Python SDK for the Workflow Engine (SeaFlow). It wraps the project-facing API for
@@ -28,22 +28,29 @@ and every method under its Go-style name (`client.workflows.Create(...)`).
 
 ## How It Works
 
-1. Create a client with the OpenResty root URL and the caller's Production Key.
+1. Create a client with the OpenResty root URL and the caller's credential: the
+   integrating project's Production Key, or the personal key issued to one account.
 2. Every request carries that same key as `Authorization: Bearer <token>`. OpenResty
    authenticates it, then SeaFlow resolves the workflow project bound to it.
 3. The end user travels per request as `X-Infra-User-Id`. Set a default with
    `end_user_id`, or copy the client per request with `with_end_user`. It
    scopes that user's private workspaces, draft workflows, assets, records, and runs.
+   A personal key already names its own end user, so leave this unset with one:
+   the Engine answers 403 when a personal key carries the header.
 4. The Engine answers with the platform envelope `{"code":0,"message":"ok","data":...}`.
    The SDK returns `data` directly and raises on a failure.
 
 ## Quick Start
 
 ```bash
-pip install sea-flow-sdk-py
+pip install "git+https://github.com/SeaArt-Infra/sea-flow-sdk-py@v0.1.3"
 ```
 
 Requires Python 3.10 or newer.
+
+The package is not on PyPI yet, so install it from the repository; `@v0.1.3` pins
+the released tag, and any other tag or commit works the same way. A local checkout
+installs with `pip install <path-to-checkout>`.
 
 ```python
 import os
@@ -111,7 +118,7 @@ print("run status:", user.runs.get(run["id"])["run"]["status"])
 | --- | --- | --- |
 | `base_url` | yes, unless `api_base_url` is set | Gateway or Engine root. The SDK derives `<base_url>/api/v1`; use `https://seainfra.dev/flow` for OpenResty |
 | `api_base_url` | no | Explicit full API prefix, mainly for test servers or non-standard mounts |
-| `production_key` | yes | The one Production Key bound to this caller. Every API request carries it as Bearer authentication |
+| `production_key` | yes | The credential every API request carries as Bearer authentication: the project's Production Key, or a personal key issued to one account |
 | `end_user_id` | no | Default `X-Infra-User-Id`. It scopes private resources within the project; derive it from the integrating product's authenticated user |
 | `headers` | no | Extra headers on every request. `Authorization` is always replaced with `production_key`; set `end_user_id` rather than an `X-Infra-User-Id` header |
 | `timeout` | no | Per-request timeout in seconds, 60 by default; `0` means no timeout |
@@ -144,6 +151,15 @@ a private owner inside that project, so workspaces, draft workflows, assets,
 records, and runs created through `with_end_user` are visible only to that same
 end user. The same external user ID in another project remains isolated.
 
+Two credentials reach this API, and they name the end user differently. A
+project Production Key acts for the integrating project and takes `end_user_id`
+for each of its visitors. A personal key is minted for one account under one
+project line — create one on the platform's Account page, or let the `seaflow`
+CLI request one when it signs you in — so it already names its own end user:
+pass it in the same `production_key` option and leave `end_user_id` unset.
+The Engine answers 403 to a personal key that also carries `X-Infra-User-Id`,
+because a personal key must not be able to act as someone else.
+
 Published templates are a shared catalog: any caller may list, read, and copy
 them, while only their creator may publish a new version or take one offline.
 
@@ -157,6 +173,26 @@ integrating product's own policy before adopting `end_user_id` for existing data
 
 The catalog still carries the same key even though SeaFlow itself does not use it for
 catalog ownership: OpenResty requires it before forwarding `/flow` requests.
+
+## Team space
+
+Workspaces and workflows created with a bare project key — no `end_user_id` — live
+in the project's shared space rather than under one person. `with_scope` reads that
+space:
+
+```python
+from sea_flow_sdk import SCOPE_TEAM
+
+team = client.with_scope(SCOPE_TEAM)
+workspaces = team.workspaces.list()
+workflow = team.workflows.get("wf-1")
+```
+
+The scope belongs to the client and applies to reads only: the Engine resolves
+reads against the shared owner and leaves writes in the caller's own space. It
+serves the shared space only to a credential that already belongs to that project
+— the project key itself, or a personal key whose parent production key is that
+project. Any other caller keeps their own space, so the scope cannot widen access.
 
 ## Errors
 
@@ -283,7 +319,15 @@ user = client.with_end_user(current_user_id)
 
 - Construct one shared client per server configuration. `with_end_user` returns
   a copy with a different `X-Infra-User-Id`, which scopes that user's private
-  SeaFlow resources within the project.
+  workspaces, draft workflows, assets, records, and runs within the project.
+- Published templates are shared catalog entries. Any caller may read or copy
+  one, while only its creator may manage it.
+- A personal key already fixes its end user, so pass it in the same
+  `production_key` option and leave `end_user_id` unset: the Engine answers 403 to
+  a personal key that also carries `X-Infra-User-Id`. Create one on the platform's
+  Account page, or let the `seaflow` CLI request one when it signs you in.
+- Read the project's shared space with `with_scope(SCOPE_TEAM)`: the scope applies
+  to reads only, and a write on that client still lands in the caller's own space.
 - Derive the end-user ID from the integrating product's authenticated user. Do
   not send it as a model-selected argument or expose the Production Key to a browser.
 

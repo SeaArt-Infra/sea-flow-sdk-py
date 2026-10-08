@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sea-flow-sdk-py"
-version = "0.1.1"
+version = "0.1.3"
 description = "Python SDK for the Workflow Engine (SeaFlow) project-facing API"
 readme = "README.md"
 requires-python = ">=3.10"

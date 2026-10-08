@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from sea_flow_sdk import (
     END_USER_HEADER,
+    SCOPE_TEAM,
     Client,
     SeaFlowError,
     WorkflowAPIError,
@@ -52,6 +53,21 @@ class TransportTests(unittest.TestCase):
             ["user-a", "user-b", "default-user"],
         )
         self.assertEqual(shared.transport.end_user_id, "default-user")
+
+    def test_with_scope_reads_the_shared_team_space_without_touching_writes(self) -> None:
+        with serve(envelope([])) as (url, requests):
+            client = Client(base_url=url, production_key="t")
+            team = client.with_scope(SCOPE_TEAM)
+            team.workspaces.list({"limit": 20})
+            team.workspaces.create({"name": "shared"})
+            client.workspaces.list()
+
+        self.assertEqual(
+            [request["query"] for request in requests],
+            ["limit=20&scope=team", "", ""],
+        )
+        self.assertEqual(team.transport.scope, SCOPE_TEAM)
+        self.assertEqual(client.transport.scope, "")
 
     def test_one_client_serves_many_end_users_concurrently_without_mixing_them_up(self) -> None:
         def respond(request: dict) -> str:

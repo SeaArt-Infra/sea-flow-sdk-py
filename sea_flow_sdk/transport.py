@@ -21,6 +21,7 @@ class Transport:
     api_base_url: str = ""
     production_key: str = ""
     end_user_id: str = ""
+    scope: str = ""
     headers: dict[str, str] = field(default_factory=dict)
     timeout: float = DEFAULT_TIMEOUT_SECONDS
 
@@ -29,6 +30,7 @@ class Transport:
         self.api_base_url = resolve_api_base_url(self.base_url, self.api_base_url)
         self.production_key = str(self.production_key or "").strip()
         self.end_user_id = str(self.end_user_id or "").strip()
+        self.scope = str(self.scope or "").strip()
         self.headers = dict(self.headers or {})
         if isinstance(self.timeout, bool) or not isinstance(self.timeout, (int, float)):
             raise WorkflowConfigError("INVALID_TIMEOUT", "sea-flow-sdk-py: timeout must be a number")
@@ -44,12 +46,30 @@ class Transport:
             api_base_url=self.api_base_url,
             production_key=self.production_key,
             end_user_id=str(end_user_id or "").strip(),
+            scope=self.scope,
+            headers=dict(self.headers),
+            timeout=self.timeout,
+        )
+
+    def with_scope(self, scope: str) -> Transport:
+        """A transport whose reads resolve against another read scope. The
+        receiver is unchanged. SCOPE_TEAM reads the project's shared space; the
+        empty string reads the caller's own space."""
+        return Transport(
+            base_url=self.base_url,
+            api_base_url=self.api_base_url,
+            production_key=self.production_key,
+            end_user_id=self.end_user_id,
+            scope=str(scope or "").strip(),
             headers=dict(self.headers),
             timeout=self.timeout,
         )
 
     def get_json(self, path: str, query: Mapping[str, Any] | None = None) -> Any:
-        return self.request("GET", path, query=query)
+        # The read scope travels on reads only. A write leaves it out of the
+        # request on purpose: the Engine ignores `scope` on a write, and not
+        # sending it keeps that visible on the wire.
+        return self.request("GET", path, query=scoped_query(query, self.scope))
 
     def post_json(self, path: str, body: Any = None) -> Any:
         return self.request("POST", path, body=body)
@@ -198,6 +218,18 @@ def is_unset_query_value(value: Any) -> bool:
     if isinstance(value, (int, float)):
         return value == 0
     return value == ""
+
+
+def scoped_query(
+    query: Mapping[str, Any] | None, scope: str
+) -> Mapping[str, Any] | None:
+    """Adds the read scope to a query. An empty scope leaves the query untouched,
+    so the default request is exactly the one the SDK has always sent."""
+    if scope == "":
+        return query
+    merged = dict(query or {})
+    merged["scope"] = scope
+    return merged
 
 
 def resolve_api_base_url(base_url: str, api_base_url: str) -> str:

@@ -13,6 +13,11 @@ DEFAULT_TIMEOUT_SECONDS = 60.0
 # ClientOptions.end_user_id.
 END_USER_HEADER = "X-Infra-User-Id"
 
+# The read scopes a client may ask for. SCOPE_TEAM reads the project's shared
+# space — the owner a bare project-key call records under. It is read-only: a
+# write always stays in the caller's own space.
+SCOPE_TEAM = "team"
+
 # Node kinds a canvas node may carry in graph node data.kind.
 NODE_KIND_INPUT_TEXT = "input-text"
 NODE_KIND_INPUT_IMAGE = "input-image"
@@ -87,6 +92,7 @@ class ClientOptions:
     api_base_url: str = ""
     production_key: str = ""
     end_user_id: str = ""
+    scope: str = ""
     headers: dict[str, str] | None = None
     timeout: float = DEFAULT_TIMEOUT_SECONDS
 

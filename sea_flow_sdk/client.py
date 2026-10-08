@@ -32,15 +32,19 @@ class Client:
         api_base_url: str = "",
         production_key: str = "",
         end_user_id: str = "",
+        scope: str = "",
         headers: dict[str, str] | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
-        resolved = _resolve_options(options, base_url, api_base_url, production_key, end_user_id, headers, timeout)
+        resolved = _resolve_options(
+            options, base_url, api_base_url, production_key, end_user_id, scope, headers, timeout
+        )
         self.transport = Transport(
             base_url=resolved.base_url,
             api_base_url=resolved.api_base_url,
             production_key=resolved.production_key,
             end_user_id=resolved.end_user_id,
+            scope=resolved.scope,
             headers=dict(resolved.headers or {}),
             timeout=resolved.timeout,
         )
@@ -85,6 +89,18 @@ class Client:
 
     WithEndUser = with_end_user
 
+    def with_scope(self, scope: str) -> Client:
+        """A client whose reads resolve against another read scope. The receiver is
+        unchanged, and the copy shares configuration. ``SCOPE_TEAM`` reads the
+        project's shared space; writes are unaffected and always stay in the
+        caller's own space."""
+        clone = Client.__new__(Client)
+        clone.transport = self.transport.with_scope(scope)
+        clone._bind_resources()
+        return clone
+
+    WithScope = with_scope
+
 
 def new_client(
     options: ClientOptions | Mapping[str, Any] | None = None,
@@ -93,6 +109,7 @@ def new_client(
     api_base_url: str = "",
     production_key: str = "",
     end_user_id: str = "",
+    scope: str = "",
     headers: dict[str, str] | None = None,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> Client:
@@ -102,6 +119,7 @@ def new_client(
         api_base_url=api_base_url,
         production_key=production_key,
         end_user_id=end_user_id,
+        scope=scope,
         headers=headers,
         timeout=timeout,
     )
@@ -113,6 +131,7 @@ def _resolve_options(
     api_base_url: str,
     production_key: str,
     end_user_id: str,
+    scope: str,
     headers: dict[str, str] | None,
     timeout: float,
 ) -> ClientOptions:
@@ -122,6 +141,7 @@ def _resolve_options(
             api_base_url=api_base_url,
             production_key=production_key,
             end_user_id=end_user_id,
+            scope=scope,
             headers=headers,
             timeout=timeout,
         )
@@ -136,6 +156,7 @@ def _resolve_options(
             options.get("production_key", options.get("productionKey", production_key)) or ""
         ),
         end_user_id=str(options.get("end_user_id", options.get("endUserId", end_user_id)) or ""),
+        scope=str(options.get("scope", scope) or ""),
         headers=options.get("headers", headers),
         timeout=float(options.get("timeout", timeout) or DEFAULT_TIMEOUT_SECONDS),
     )
